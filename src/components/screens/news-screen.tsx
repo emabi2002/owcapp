@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CalendarDays, ChevronRight, Share2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, ChevronRight, Loader2, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { TopBar } from "@/components/app/top-bar";
 import { Pill } from "@/components/app/kit";
+import { getPublicNews } from "@/lib/api";
 import { useNav } from "@/lib/nav";
-import { NEWS } from "@/lib/owc-data";
+import { NEWS, type NewsItem } from "@/lib/owc-data";
 import { cn } from "@/lib/utils";
 
 const CATS = ["All", "Announcement", "Public Notice", "Awareness", "Consultation", "Labour Update"];
@@ -22,10 +23,36 @@ function fmtDate(d: string) {
 export function NewsScreen() {
   const { navigate } = useNav();
   const [cat, setCat] = useState("All");
+  const [news, setNews] = useState<NewsItem[]>(NEWS);
+  const [loading, setLoading] = useState(true);
+  const [source, setSource] = useState<"owc-api" | "mock">("mock");
+
+  useEffect(() => {
+    let active = true;
+    void getPublicNews()
+      .then((result) => {
+        if (!active) return;
+        setNews(result.items);
+        setSource(result.source);
+      })
+      .catch(() => {
+        if (!active) return;
+        setNews(NEWS);
+        setSource("mock");
+        toast.error("Live OWC news is temporarily unavailable. Showing the local catalogue.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const items = useMemo(
-    () => (cat === "All" ? NEWS : NEWS.filter((n) => n.category === cat)),
-    [cat]
+    () => (cat === "All" ? news : news.filter((n) => n.category === cat)),
+    [cat, news],
   );
   const featured = items.find((n) => n.featured) ?? items[0];
   const rest = items.filter((n) => n.slug !== featured?.slug);
@@ -45,7 +72,7 @@ export function NewsScreen() {
                 "shrink-0 rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition",
                 cat === c
                   ? "border-primary bg-primary text-white"
-                  : "border-border bg-card text-muted-foreground"
+                  : "border-border bg-card text-muted-foreground",
               )}
             >
               {c}
@@ -55,6 +82,16 @@ export function NewsScreen() {
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-4">
+        <div className="mb-3 flex justify-end">
+          {loading ? (
+            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Updating
+            </span>
+          ) : source === "mock" ? (
+            <span className="text-[10px] text-muted-foreground">Local catalogue</span>
+          ) : null}
+        </div>
+
         {featured && (
           <button
             type="button"
@@ -110,7 +147,25 @@ export function NewsScreen() {
 
 export function NewsDetailScreen() {
   const { params } = useNav();
-  const item = NEWS.find((n) => n.slug === params.slug) ?? NEWS[0];
+  const slug = String(params.slug ?? "");
+  const fallback = NEWS.find((n) => n.slug === slug) ?? NEWS[0];
+  const [item, setItem] = useState<NewsItem>(fallback);
+
+  useEffect(() => {
+    let active = true;
+    void getPublicNews()
+      .then((result) => {
+        if (!active) return;
+        const found = result.items.find((newsItem) => newsItem.slug === slug);
+        if (found) setItem(found);
+      })
+      .catch(() => {
+        // The local article remains available when the live service is offline.
+      });
+    return () => {
+      active = false;
+    };
+  }, [slug]);
 
   return (
     <div className="flex h-full flex-col">
@@ -120,7 +175,11 @@ export function NewsDetailScreen() {
         action={
           <button
             type="button"
-            onClick={() => toast.success("Share link copied")}
+            onClick={() => {
+              const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+              navigator.clipboard?.writeText(shareUrl);
+              toast.success("Share link copied");
+            }}
             aria-label="Share"
             className="grid h-9 w-9 place-items-center rounded-full text-white/90 transition active:scale-90 hover:bg-white/10"
           >
