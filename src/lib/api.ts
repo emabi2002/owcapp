@@ -4,6 +4,11 @@ const DEFAULT_OWC_API_BASE_URL = process.env.NEXT_PUBLIC_OWC_API_BASE_URL?.trim(
 
 type FetchLike = typeof fetch;
 
+type ApiOptions = {
+  baseUrl?: string;
+  fetchImpl?: FetchLike;
+};
+
 export type TrackClaimInput = {
   reference: string;
   surname?: string;
@@ -15,9 +20,35 @@ export type TrackClaimResult = {
   source: "owc-api" | "mock";
 };
 
-export type TrackClaimOptions = {
-  baseUrl?: string;
-  fetchImpl?: FetchLike;
+export type LodgeClaimInput = {
+  workerName: string;
+  workerPhone?: string;
+  workerEmail?: string;
+  employerName: string;
+  province?: string;
+  occupation?: string;
+  weeklyWage?: string;
+  injuryDate: string;
+  injuryType?: string;
+  description: string;
+  documentCount?: number;
+  declaration?: boolean;
+  captchaToken?: string;
+};
+
+export type LodgeClaimResult = {
+  reference: string;
+  receivedAt?: string;
+  source: "owc-api" | "mock";
+};
+
+export type EmployerVerifyResult = {
+  registered: boolean;
+  name?: string;
+  registrationNo?: string;
+  policyExpiry?: string;
+  status?: string;
+  source: "owc-api" | "mock";
 };
 
 export function isOwcApiConfigured(baseUrl = DEFAULT_OWC_API_BASE_URL) {
@@ -118,9 +149,13 @@ function getMockClaim(reference: string): ClaimRecord | null {
   };
 }
 
+function newMockReference() {
+  return `OWC-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+}
+
 export async function trackClaim(
   input: TrackClaimInput,
-  options: TrackClaimOptions = {},
+  options: ApiOptions = {},
 ): Promise<TrackClaimResult> {
   const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
 
@@ -157,4 +192,81 @@ export async function trackClaim(
     claim: normalizeApiClaim(payload.claim),
     source: "owc-api",
   };
+}
+
+export async function lodgeClaim(
+  input: LodgeClaimInput,
+  options: ApiOptions = {},
+): Promise<LodgeClaimResult> {
+  const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
+
+  if (!isOwcApiConfigured(baseUrl)) {
+    return {
+      reference: newMockReference(),
+      receivedAt: new Date().toISOString(),
+      source: "mock",
+    };
+  }
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(buildOwcApiUrl("/api/claims/lodge", baseUrl), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    throw new Error("OWC claim lodgement service is temporarily unavailable.");
+  }
+
+  const payload = (await response.json()) as {
+    reference?: string;
+    receivedAt?: string;
+  };
+  if (!payload.reference) {
+    throw new Error("OWC claim lodgement returned an invalid response.");
+  }
+
+  return {
+    reference: payload.reference,
+    receivedAt: payload.receivedAt,
+    source: "owc-api",
+  };
+}
+
+export async function verifyEmployer(
+  input: { query: string },
+  options: ApiOptions = {},
+): Promise<EmployerVerifyResult> {
+  const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
+
+  if (!isOwcApiConfigured(baseUrl)) {
+    const query = input.query.trim();
+    const registered = query.length > 2;
+    return {
+      registered,
+      ...(registered
+        ? {
+            name: query,
+            registrationNo: "EMP-DEMO-1001",
+            status: "Compliant",
+          }
+        : {}),
+      source: "mock",
+    };
+  }
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(buildOwcApiUrl("/api/employers/verify", baseUrl), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: input.query.trim() }),
+  });
+
+  if (!response.ok) {
+    throw new Error("OWC employer verification service is temporarily unavailable.");
+  }
+
+  const payload = (await response.json()) as Omit<EmployerVerifyResult, "source">;
+  return { ...payload, source: "owc-api" };
 }
