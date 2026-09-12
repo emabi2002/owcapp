@@ -37,7 +37,13 @@ export type LodgeClaimInput = {
   captchaToken?: string;
 };
 
-export type LodgeClaimResult = { reference: string; receivedAt?: string; source: ContentSource };
+export type LodgeClaimResult = {
+  reference: string;
+  receivedAt?: string;
+  evidenceUploadToken?: string;
+  evidenceUploadExpiresInSeconds?: number;
+  source: ContentSource;
+};
 
 export type EmployerVerifyResult = {
   registered: boolean;
@@ -228,9 +234,20 @@ export async function lodgeClaim(input: LodgeClaimInput, options: ApiOptions = {
     body: JSON.stringify(input),
   });
   if (!response.ok) throw new Error("OWC claim lodgement service is temporarily unavailable.");
-  const payload = (await response.json()) as { reference?: string; receivedAt?: string };
+  const payload = (await response.json()) as {
+    reference?: string;
+    receivedAt?: string;
+    evidenceUploadToken?: string;
+    evidenceUploadExpiresInSeconds?: number;
+  };
   if (!payload.reference) throw new Error("OWC claim lodgement returned an invalid response.");
-  return { reference: payload.reference, receivedAt: payload.receivedAt, source: "owc-api" };
+  return {
+    reference: payload.reference,
+    receivedAt: payload.receivedAt,
+    evidenceUploadToken: payload.evidenceUploadToken,
+    evidenceUploadExpiresInSeconds: payload.evidenceUploadExpiresInSeconds,
+    source: "owc-api",
+  };
 }
 
 export async function verifyEmployer(input: { query: string }, options: ApiOptions = {}): Promise<EmployerVerifyResult> {
