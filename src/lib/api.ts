@@ -75,13 +75,17 @@ export type InjuryReportResult = {
   source: ContentSource;
 };
 
+export type PublicFormDoc = FormDoc & {
+  fileUrl?: string;
+};
+
 export type PublicNewsResult = {
   items: NewsItem[];
   source: ContentSource;
 };
 
 export type PublicFormsResult = {
-  items: FormDoc[];
+  items: PublicFormDoc[];
   source: ContentSource;
 };
 
@@ -222,7 +226,7 @@ function normalizeFormCategory(value: unknown): FormDoc["category"] {
     : "Claims";
 }
 
-function normalizePublicFormItem(value: Record<string, unknown>): FormDoc {
+function normalizePublicFormItem(value: Record<string, unknown>): PublicFormDoc {
   return {
     code: String(value.code ?? ""),
     title: String(value.title ?? "Untitled"),
@@ -230,6 +234,7 @@ function normalizePublicFormItem(value: Record<string, unknown>): FormDoc {
     format: value.format === "DOCX" ? "DOCX" : "PDF",
     size: String(value.size ?? "—"),
     updated: String(value.updated ?? ""),
+    fileUrl: value.fileUrl ? String(value.fileUrl) : undefined,
   };
 }
 
