@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 describe("OWC mobile evidence API adapter", () => {
   test("uploads a claim evidence file with the short-lived OWC bearer token", async () => {
-    const api = (await import("./api")) as Record<string, unknown>;
-    const uploadClaimEvidence = api.uploadClaimEvidence as
+    const evidenceApi = (await import("./evidence-api")) as Record<string, unknown>;
+    const uploadClaimEvidence = evidenceApi.uploadClaimEvidence as
       | undefined
       | ((
           input: {
