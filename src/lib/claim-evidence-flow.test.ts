@@ -33,9 +33,11 @@ describe("claim evidence upload flow", () => {
       onProgress: (completed, total) => progress.push(`${completed}/${total}`),
     });
 
-    expect(uploaded).toEqual(["medical.pdf", "identity.jpg"]);
-    expect(progress).toEqual(["1/2", "2/2"]);
-    expect(result).toEqual({ total: 2, uploaded: 2, failed: 0, failures: [] });
+    expect(JSON.stringify(uploaded)).toBe(JSON.stringify(["medical.pdf", "identity.jpg"]));
+    expect(JSON.stringify(progress)).toBe(JSON.stringify(["1/2", "2/2"]));
+    expect(JSON.stringify(result)).toBe(
+      JSON.stringify({ total: 2, uploaded: 2, failed: 0, failures: [] }),
+    );
   });
 
   test("keeps the lodged claim valid when one evidence file fails", async () => {
@@ -66,11 +68,13 @@ describe("claim evidence upload flow", () => {
       },
     });
 
-    expect(result).toEqual({
-      total: 2,
-      uploaded: 1,
-      failed: 1,
-      failures: [{ fileName: "photo.jpg", error: "Security scan unavailable" }],
-    });
+    expect(JSON.stringify(result)).toBe(
+      JSON.stringify({
+        total: 2,
+        uploaded: 1,
+        failed: 1,
+        failures: [{ fileName: "photo.jpg", error: "Security scan unavailable" }],
+      }),
+    );
   });
 });
