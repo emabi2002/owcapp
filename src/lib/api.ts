@@ -18,16 +18,8 @@ type ApiOptions = {
 
 type ContentSource = "owc-api" | "mock";
 
-export type TrackClaimInput = {
-  reference: string;
-  surname?: string;
-};
-
-export type TrackClaimResult = {
-  found: boolean;
-  claim: ClaimRecord | null;
-  source: ContentSource;
-};
+export type TrackClaimInput = { reference: string; surname?: string };
+export type TrackClaimResult = { found: boolean; claim: ClaimRecord | null; source: ContentSource };
 
 export type LodgeClaimInput = {
   workerName: string;
@@ -45,11 +37,7 @@ export type LodgeClaimInput = {
   captchaToken?: string;
 };
 
-export type LodgeClaimResult = {
-  reference: string;
-  receivedAt?: string;
-  source: ContentSource;
-};
+export type LodgeClaimResult = { reference: string; receivedAt?: string; source: ContentSource };
 
 export type EmployerVerifyResult = {
   registered: boolean;
@@ -70,60 +58,45 @@ export type InjuryReportInput = {
   captchaToken?: string;
 };
 
-export type InjuryReportResult = {
-  reference: string;
-  source: ContentSource;
-};
-
-export type PublicFormDoc = FormDoc & {
-  fileUrl?: string;
-};
-
-export type PublicNewsResult = {
-  items: NewsItem[];
-  source: ContentSource;
-};
-
-export type PublicFormsResult = {
-  items: PublicFormDoc[];
-  source: ContentSource;
-};
+export type InjuryReportResult = { reference: string; source: ContentSource };
+export type PublicFormDoc = FormDoc & { fileUrl?: string };
+export type PublicNewsResult = { items: NewsItem[]; source: ContentSource };
+export type PublicFormsResult = { items: PublicFormDoc[]; source: ContentSource };
 
 export function isOwcApiConfigured(baseUrl = DEFAULT_OWC_API_BASE_URL) {
   return baseUrl.trim().length > 0;
 }
 
-export function buildOwcApiUrl(
-  path: string,
-  baseUrl = DEFAULT_OWC_API_BASE_URL,
-) {
+export function buildOwcApiUrl(path: string, baseUrl = DEFAULT_OWC_API_BASE_URL) {
   const normalizedBase = baseUrl.trim().replace(/\/+$/, "");
   const normalizedPath = `/${path.trim().replace(/^\/+/, "")}`;
-
   if (!normalizedBase) return normalizedPath;
   return `${normalizedBase}${normalizedPath}`;
+}
+
+export function resolveOwcAssetUrl(value: string | undefined, baseUrl: string) {
+  if (!value) return undefined;
+  const asset = value.trim();
+  if (!asset) return undefined;
+  if (/^https?:\/\//i.test(asset)) return asset;
+  const normalizedBase = baseUrl.trim().replace(/\/+$/, "");
+  if (!normalizedBase) return asset;
+  return `${normalizedBase}/${asset.replace(/^\/+/, "")}`;
 }
 
 function normalizeClaimStatus(value: string): ClaimRecord["status"] {
   switch (value.trim().toLowerCase()) {
     case "new":
-    case "received":
-      return "Received";
+    case "received": return "Received";
     case "under assessment":
-    case "assessment":
-      return "Under Assessment";
+    case "assessment": return "Under Assessment";
     case "awaiting documents":
-    case "documents required":
-      return "Awaiting Documents";
-    case "approved":
-      return "Approved";
-    case "paid":
-      return "Paid";
+    case "documents required": return "Awaiting Documents";
+    case "approved": return "Approved";
+    case "paid": return "Paid";
     case "declined":
-    case "rejected":
-      return "Declined";
-    default:
-      return "Under Assessment";
+    case "rejected": return "Declined";
+    default: return "Under Assessment";
   }
 }
 
@@ -153,10 +126,7 @@ function normalizeApiClaim(value: Record<string, unknown>): ClaimRecord {
     updates: Array.isArray(value.updates)
       ? value.updates.map((update) => {
           const item = update as Record<string, unknown>;
-          return {
-            date: String(item.date ?? ""),
-            text: String(item.text ?? item.message ?? "Claim updated"),
-          };
+          return { date: String(item.date ?? ""), text: String(item.text ?? item.message ?? "Claim updated") };
         })
       : undefined,
   };
@@ -164,13 +134,9 @@ function normalizeApiClaim(value: Record<string, unknown>): ClaimRecord {
 
 function getMockClaim(reference: string): ClaimRecord | null {
   const normalizedReference = reference.trim().toUpperCase();
-  const existing = SAMPLE_CLAIMS.find(
-    (claim) => claim.reference.toUpperCase() === normalizedReference,
-  );
+  const existing = SAMPLE_CLAIMS.find((claim) => claim.reference.toUpperCase() === normalizedReference);
   if (existing) return existing;
-
   if (!normalizedReference.startsWith("OWC-")) return null;
-
   return {
     ...SAMPLE_CLAIMS[0],
     reference: normalizedReference,
@@ -193,19 +159,13 @@ function newMockReference(prefix = "OWC") {
 
 function normalizeNewsCategory(value: unknown): NewsItem["category"] {
   const category = String(value ?? "Announcement");
-  const supported: NewsItem["category"][] = [
-    "Announcement",
-    "Awareness",
-    "Public Notice",
-    "Consultation",
-    "Labour Update",
-  ];
+  const supported: NewsItem["category"][] = ["Announcement", "Awareness", "Public Notice", "Consultation", "Labour Update"];
   return supported.includes(category as NewsItem["category"])
     ? (category as NewsItem["category"])
     : "Announcement";
 }
 
-function normalizePublicNewsItem(value: Record<string, unknown>): NewsItem {
+function normalizePublicNewsItem(value: Record<string, unknown>, baseUrl: string): NewsItem {
   return {
     slug: String(value.slug ?? value.id ?? ""),
     category: normalizeNewsCategory(value.category),
@@ -213,7 +173,7 @@ function normalizePublicNewsItem(value: Record<string, unknown>): NewsItem {
     title: String(value.title ?? "Untitled"),
     excerpt: String(value.excerpt ?? ""),
     body: String(value.body ?? ""),
-    image: String(value.image ?? ""),
+    image: resolveOwcAssetUrl(value.image ? String(value.image) : undefined, baseUrl) ?? "",
     featured: Boolean(value.featured),
   };
 }
@@ -226,7 +186,7 @@ function normalizeFormCategory(value: unknown): FormDoc["category"] {
     : "Claims";
 }
 
-function normalizePublicFormItem(value: Record<string, unknown>): PublicFormDoc {
+function normalizePublicFormItem(value: Record<string, unknown>, baseUrl: string): PublicFormDoc {
   return {
     code: String(value.code ?? ""),
     title: String(value.title ?? "Untitled"),
@@ -234,197 +194,104 @@ function normalizePublicFormItem(value: Record<string, unknown>): PublicFormDoc 
     format: value.format === "DOCX" ? "DOCX" : "PDF",
     size: String(value.size ?? "—"),
     updated: String(value.updated ?? ""),
-    fileUrl: value.fileUrl ? String(value.fileUrl) : undefined,
+    fileUrl: resolveOwcAssetUrl(value.fileUrl ? String(value.fileUrl) : undefined, baseUrl),
   };
 }
 
-export async function trackClaim(
-  input: TrackClaimInput,
-  options: ApiOptions = {},
-): Promise<TrackClaimResult> {
+export async function trackClaim(input: TrackClaimInput, options: ApiOptions = {}): Promise<TrackClaimResult> {
   const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
-
   if (!isOwcApiConfigured(baseUrl)) {
     const claim = getMockClaim(input.reference);
     return { found: Boolean(claim), claim, source: "mock" };
   }
-
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(buildOwcApiUrl("/api/claims/track", baseUrl), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      reference: input.reference.trim(),
-      ...(input.surname?.trim() ? { surname: input.surname.trim() } : {}),
-    }),
+    body: JSON.stringify({ reference: input.reference.trim(), ...(input.surname?.trim() ? { surname: input.surname.trim() } : {}) }),
   });
-
-  if (!response.ok) {
-    throw new Error("OWC claim tracking service is temporarily unavailable.");
-  }
-
-  const payload = (await response.json()) as {
-    found?: boolean;
-    claim?: Record<string, unknown>;
-  };
-
-  if (!payload.found || !payload.claim) {
-    return { found: false, claim: null, source: "owc-api" };
-  }
-
-  return {
-    found: true,
-    claim: normalizeApiClaim(payload.claim),
-    source: "owc-api",
-  };
+  if (!response.ok) throw new Error("OWC claim tracking service is temporarily unavailable.");
+  const payload = (await response.json()) as { found?: boolean; claim?: Record<string, unknown> };
+  if (!payload.found || !payload.claim) return { found: false, claim: null, source: "owc-api" };
+  return { found: true, claim: normalizeApiClaim(payload.claim), source: "owc-api" };
 }
 
-export async function lodgeClaim(
-  input: LodgeClaimInput,
-  options: ApiOptions = {},
-): Promise<LodgeClaimResult> {
+export async function lodgeClaim(input: LodgeClaimInput, options: ApiOptions = {}): Promise<LodgeClaimResult> {
   const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
-
   if (!isOwcApiConfigured(baseUrl)) {
-    return {
-      reference: newMockReference(),
-      receivedAt: new Date().toISOString(),
-      source: "mock",
-    };
+    return { reference: newMockReference(), receivedAt: new Date().toISOString(), source: "mock" };
   }
-
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(buildOwcApiUrl("/api/claims/lodge", baseUrl), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-
-  if (!response.ok) {
-    throw new Error("OWC claim lodgement service is temporarily unavailable.");
-  }
-
-  const payload = (await response.json()) as {
-    reference?: string;
-    receivedAt?: string;
-  };
-  if (!payload.reference) {
-    throw new Error("OWC claim lodgement returned an invalid response.");
-  }
-
-  return {
-    reference: payload.reference,
-    receivedAt: payload.receivedAt,
-    source: "owc-api",
-  };
+  if (!response.ok) throw new Error("OWC claim lodgement service is temporarily unavailable.");
+  const payload = (await response.json()) as { reference?: string; receivedAt?: string };
+  if (!payload.reference) throw new Error("OWC claim lodgement returned an invalid response.");
+  return { reference: payload.reference, receivedAt: payload.receivedAt, source: "owc-api" };
 }
 
-export async function verifyEmployer(
-  input: { query: string },
-  options: ApiOptions = {},
-): Promise<EmployerVerifyResult> {
+export async function verifyEmployer(input: { query: string }, options: ApiOptions = {}): Promise<EmployerVerifyResult> {
   const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
-
   if (!isOwcApiConfigured(baseUrl)) {
     const query = input.query.trim();
     const registered = query.length > 2;
     return {
       registered,
-      ...(registered
-        ? {
-            name: query,
-            registrationNo: "EMP-DEMO-1001",
-            status: "Compliant",
-          }
-        : {}),
+      ...(registered ? { name: query, registrationNo: "EMP-DEMO-1001", status: "Compliant" } : {}),
       source: "mock",
     };
   }
-
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(buildOwcApiUrl("/api/employers/verify", baseUrl), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query: input.query.trim() }),
   });
-
-  if (!response.ok) {
-    throw new Error("OWC employer verification service is temporarily unavailable.");
-  }
-
+  if (!response.ok) throw new Error("OWC employer verification service is temporarily unavailable.");
   const payload = (await response.json()) as Omit<EmployerVerifyResult, "source">;
   return { ...payload, source: "owc-api" };
 }
 
-export async function reportInjury(
-  input: InjuryReportInput,
-  options: ApiOptions = {},
-): Promise<InjuryReportResult> {
+export async function reportInjury(input: InjuryReportInput, options: ApiOptions = {}): Promise<InjuryReportResult> {
   const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
-
-  if (!isOwcApiConfigured(baseUrl)) {
-    return { reference: newMockReference("INJ"), source: "mock" };
-  }
-
+  if (!isOwcApiConfigured(baseUrl)) return { reference: newMockReference("INJ"), source: "mock" };
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(buildOwcApiUrl("/api/injuries", baseUrl), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-
-  if (!response.ok) {
-    throw new Error("OWC workplace injury reporting service is temporarily unavailable.");
-  }
-
+  if (!response.ok) throw new Error("OWC workplace injury reporting service is temporarily unavailable.");
   const payload = (await response.json()) as { reference?: string };
-  if (!payload.reference) {
-    throw new Error("OWC workplace injury report returned an invalid response.");
-  }
-
+  if (!payload.reference) throw new Error("OWC workplace injury report returned an invalid response.");
   return { reference: payload.reference, source: "owc-api" };
 }
 
-export async function getPublicNews(
-  options: ApiOptions = {},
-): Promise<PublicNewsResult> {
+export async function getPublicNews(options: ApiOptions = {}): Promise<PublicNewsResult> {
   const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
   if (!isOwcApiConfigured(baseUrl)) return { items: NEWS, source: "mock" };
-
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(buildOwcApiUrl("/api/public/news", baseUrl), {
     method: "GET",
     headers: { Accept: "application/json" },
   });
-  if (!response.ok) {
-    throw new Error("OWC news service is temporarily unavailable.");
-  }
-
+  if (!response.ok) throw new Error("OWC news service is temporarily unavailable.");
   const payload = (await response.json()) as { items?: Array<Record<string, unknown>> };
-  return {
-    items: (payload.items ?? []).map(normalizePublicNewsItem),
-    source: "owc-api",
-  };
+  return { items: (payload.items ?? []).map((item) => normalizePublicNewsItem(item, baseUrl)), source: "owc-api" };
 }
 
-export async function getPublicForms(
-  options: ApiOptions = {},
-): Promise<PublicFormsResult> {
+export async function getPublicForms(options: ApiOptions = {}): Promise<PublicFormsResult> {
   const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
   if (!isOwcApiConfigured(baseUrl)) return { items: FORMS, source: "mock" };
-
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(buildOwcApiUrl("/api/public/forms", baseUrl), {
     method: "GET",
     headers: { Accept: "application/json" },
   });
-  if (!response.ok) {
-    throw new Error("OWC forms service is temporarily unavailable.");
-  }
-
+  if (!response.ok) throw new Error("OWC forms service is temporarily unavailable.");
   const payload = (await response.json()) as { items?: Array<Record<string, unknown>> };
-  return {
-    items: (payload.items ?? []).map(normalizePublicFormItem),
-    source: "owc-api",
-  };
+  return { items: (payload.items ?? []).map((item) => normalizePublicFormItem(item, baseUrl)), source: "owc-api" };
 }
