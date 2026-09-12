@@ -134,4 +134,30 @@ describe("OWC mobile API client", () => {
     expect(result?.registered).toBe(true);
     expect(result?.source).toBe("owc-api");
   });
+
+  test("reports a workplace injury through the configured OWC API", async () => {
+    const api = (await import("./api")) as Record<string, unknown>;
+    const reportInjury = api.reportInjury as
+      | undefined
+      | ((input: Record<string, unknown>, options: Record<string, unknown>) => Promise<Record<string, unknown>>);
+
+    const fetchImpl = async () =>
+      new Response(
+        JSON.stringify({ ok: true, reference: "INJ-2026-005112" }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      );
+
+    const result = await reportInjury?.(
+      {
+        employerName: "Pacific Engineering Ltd",
+        workerName: "Mara Kila",
+        injuryDate: "2026-09-10",
+        description: "Workplace limb injury",
+      },
+      { baseUrl: "https://owc.gov.pg", fetchImpl },
+    );
+
+    expect(result?.reference).toBe("INJ-2026-005112");
+    expect(result?.source).toBe("owc-api");
+  });
 });
