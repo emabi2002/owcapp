@@ -18,8 +18,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TopBar } from "@/components/app/top-bar";
+import { trackClaim } from "@/lib/api";
 import { useNav } from "@/lib/nav";
-import { SAMPLE_CLAIMS, type ClaimRecord } from "@/lib/owc-data";
+import type { ClaimRecord } from "@/lib/owc-data";
 import { cn } from "@/lib/utils";
 
 const statusDot: Record<ClaimRecord["status"], string> = {
@@ -39,45 +40,30 @@ export function TrackScreen() {
   const [claim, setClaim] = useState<ClaimRecord | null>(null);
   const [notFound, setNotFound] = useState(false);
 
-  const lookup = (value: string) => {
+  const lookup = async (value: string) => {
     if (!value.trim()) {
       toast.error("Enter a claim reference number.");
       return;
     }
+
     setLoading(true);
     setNotFound(false);
-    setTimeout(() => {
-      const found =
-        SAMPLE_CLAIMS.find(
-          (c) => c.reference.toLowerCase() === value.trim().toLowerCase()
-        ) ??
-        // Any newly lodged OWC-2026 reference resolves to a freshly received claim
-        (value.toUpperCase().startsWith("OWC-")
-          ? {
-              ...SAMPLE_CLAIMS[0],
-              reference: value.toUpperCase(),
-              status: "Received" as const,
-              steps: [
-                { label: "Claim received", done: true, date: "Today" },
-                { label: "Documents verified", done: false },
-                { label: "Medical assessment", done: false },
-                { label: "Determination", done: false },
-                { label: "Compensation payment", done: false },
-              ],
-              pending: ["Medical Practitioner's First Report (MED-1)"],
-              updates: [
-                { date: "Today", text: "Claim received and queued for verification." },
-              ],
-            }
-          : null);
-      setClaim(found);
-      setNotFound(!found);
+
+    try {
+      const result = await trackClaim({ reference: value });
+      setClaim(result.claim);
+      setNotFound(!result.found);
+    } catch {
+      setClaim(null);
+      setNotFound(false);
+      toast.error("Claim tracking is temporarily unavailable. Please try again.");
+    } finally {
       setLoading(false);
-    }, 900);
+    }
   };
 
   useEffect(() => {
-    if (initialRef) lookup(initialRef);
+    if (initialRef) void lookup(initialRef);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -86,7 +72,6 @@ export function TrackScreen() {
       <TopBar title="Track a Claim" subtitle="Check your claim status" />
 
       <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-5">
-        {/* Lookup */}
         <div className="rounded-2xl border border-border bg-card p-4 shadow-app">
           <label className="text-[13px] font-semibold text-foreground">
             Claim reference number
@@ -97,12 +82,12 @@ export function TrackScreen() {
               <Input
                 value={ref}
                 onChange={(e) => setRef(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && lookup(ref)}
+                onKeyDown={(e) => e.key === "Enter" && void lookup(ref)}
                 placeholder="OWC-2026-XXXXXX"
                 className="h-11 pl-9 font-mono"
               />
             </div>
-            <Button onClick={() => lookup(ref)} disabled={loading} className="h-11 px-4">
+            <Button onClick={() => void lookup(ref)} disabled={loading} className="h-11 px-4">
               {loading ? <Loader2 className="animate-spin" /> : "Track"}
             </Button>
           </div>
@@ -112,7 +97,7 @@ export function TrackScreen() {
               className="font-mono font-semibold text-primary"
               onClick={() => {
                 setRef("OWC-2026-004821");
-                lookup("OWC-2026-004821");
+                void lookup("OWC-2026-004821");
               }}
             >
               OWC-2026-004821
@@ -133,7 +118,6 @@ export function TrackScreen() {
 
         {claim && (
           <div className="mt-5 animate-fade-up space-y-4">
-            {/* Summary */}
             <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-app">
               <div className="bg-navy-grad p-4 text-white">
                 <div className="flex items-center justify-between gap-2">
@@ -155,7 +139,6 @@ export function TrackScreen() {
               </div>
             </div>
 
-            {/* Pending documents */}
             {claim.pending && claim.pending.length > 0 && (
               <div className="rounded-2xl border border-warning/30 bg-warning/5 p-4">
                 <div className="flex items-center gap-2">
@@ -175,7 +158,6 @@ export function TrackScreen() {
               </div>
             )}
 
-            {/* Timeline */}
             <div className="rounded-2xl border border-border bg-card p-4 shadow-app">
               <h3 className="mb-3 text-[13px] font-bold text-primary">
                 Claim progress
@@ -190,7 +172,7 @@ export function TrackScreen() {
                         <span
                           className={cn(
                             "absolute left-[11px] top-6 h-full w-0.5",
-                            s.done ? "bg-success" : "bg-border"
+                            s.done ? "bg-success" : "bg-border",
                           )}
                         />
                       )}
@@ -201,7 +183,7 @@ export function TrackScreen() {
                             ? "bg-success text-white"
                             : current
                               ? "bg-gold text-navy"
-                              : "bg-secondary text-muted-foreground"
+                              : "bg-secondary text-muted-foreground",
                         )}
                       >
                         {s.done ? (
@@ -216,7 +198,7 @@ export function TrackScreen() {
                         <div
                           className={cn(
                             "text-[13px] font-semibold",
-                            s.done || current ? "text-foreground" : "text-muted-foreground"
+                            s.done || current ? "text-foreground" : "text-muted-foreground",
                           )}
                         >
                           {s.label}
@@ -238,7 +220,6 @@ export function TrackScreen() {
               </ol>
             </div>
 
-            {/* Updates */}
             {claim.updates && claim.updates.length > 0 && (
               <div className="rounded-2xl border border-border bg-card p-4 shadow-app">
                 <h3 className="mb-3 text-[13px] font-bold text-primary">
