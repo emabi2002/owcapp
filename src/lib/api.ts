@@ -51,6 +51,21 @@ export type EmployerVerifyResult = {
   source: "owc-api" | "mock";
 };
 
+export type InjuryReportInput = {
+  employerName: string;
+  employerContact?: string;
+  workerName: string;
+  injuryDate: string;
+  injuryType?: string;
+  description: string;
+  captchaToken?: string;
+};
+
+export type InjuryReportResult = {
+  reference: string;
+  source: "owc-api" | "mock";
+};
+
 export function isOwcApiConfigured(baseUrl = DEFAULT_OWC_API_BASE_URL) {
   return baseUrl.trim().length > 0;
 }
@@ -149,8 +164,8 @@ function getMockClaim(reference: string): ClaimRecord | null {
   };
 }
 
-function newMockReference() {
-  return `OWC-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+function newMockReference(prefix = "OWC") {
+  return `${prefix}-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
 export async function trackClaim(
@@ -269,4 +284,33 @@ export async function verifyEmployer(
 
   const payload = (await response.json()) as Omit<EmployerVerifyResult, "source">;
   return { ...payload, source: "owc-api" };
+}
+
+export async function reportInjury(
+  input: InjuryReportInput,
+  options: ApiOptions = {},
+): Promise<InjuryReportResult> {
+  const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
+
+  if (!isOwcApiConfigured(baseUrl)) {
+    return { reference: newMockReference("INJ"), source: "mock" };
+  }
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(buildOwcApiUrl("/api/injuries", baseUrl), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    throw new Error("OWC workplace injury reporting service is temporarily unavailable.");
+  }
+
+  const payload = (await response.json()) as { reference?: string };
+  if (!payload.reference) {
+    throw new Error("OWC workplace injury report returned an invalid response.");
+  }
+
+  return { reference: payload.reference, source: "owc-api" };
 }
