@@ -1,7 +1,7 @@
 /* OWC PNG — Service Worker
    Enables installability (Android/Chrome) and basic offline support. */
 
-const VERSION = "owc-v1";
+const VERSION = "owc-v2";
 const CORE_CACHE = `owc-core-${VERSION}`;
 const RUNTIME_CACHE = `owc-runtime-${VERSION}`;
 
@@ -45,6 +45,11 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Never intercept or cache API traffic. Claims, identity, employer and other
+  // operational responses must always go directly to the network/application
+  // layer and must not be written to an offline cache.
+  if (url.pathname.startsWith("/api/")) return;
 
   // Navigations: network-first, fall back to cached shell when offline.
   if (request.mode === "navigate") {
