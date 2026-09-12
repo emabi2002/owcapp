@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 describe("claim evidence upload flow", () => {
   test("uploads every selected file and reports successful completion", async () => {
-    const module = (await import("./claim-evidence-flow")) as Record<string, unknown>;
-    const uploadSelectedEvidence = module.uploadSelectedEvidence as
+    const evidenceFlow = (await import("./claim-evidence-flow")) as Record<string, unknown>;
+    const uploadSelectedEvidence = evidenceFlow.uploadSelectedEvidence as
       | undefined
       | ((input: {
           claimReference: string;
@@ -39,8 +39,8 @@ describe("claim evidence upload flow", () => {
   });
 
   test("keeps the lodged claim valid when one evidence file fails", async () => {
-    const module = (await import("./claim-evidence-flow")) as Record<string, unknown>;
-    const uploadSelectedEvidence = module.uploadSelectedEvidence as
+    const evidenceFlow = (await import("./claim-evidence-flow")) as Record<string, unknown>;
+    const uploadSelectedEvidence = evidenceFlow.uploadSelectedEvidence as
       | undefined
       | ((input: {
           claimReference: string;
