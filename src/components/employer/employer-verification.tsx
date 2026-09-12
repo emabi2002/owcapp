@@ -72,7 +72,10 @@ export function EmployerVerification() {
                 <span className="text-[13px] font-semibold">
                   {result.registered ? result.name ?? query : "Employer not verified"}
                 </span>
-                <Badge variant={result.registered ? "success" : "destructive"}>
+                <Badge
+                  variant={result.registered ? "default" : "destructive"}
+                  className={result.registered ? "bg-success text-white hover:bg-success" : undefined}
+                >
                   {result.registered ? result.status ?? "Registered" : "Not verified"}
                 </Badge>
               </div>
