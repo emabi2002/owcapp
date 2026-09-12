@@ -11,6 +11,7 @@ import {
 import { TopBar } from "@/components/app/top-bar";
 import { SectionTitle } from "@/components/app/kit";
 import { Icon } from "@/components/app/icon";
+import { EmployerVerification } from "@/components/employer/employer-verification";
 import { useNav } from "@/lib/nav";
 import { EMPLOYER_STEPS, EMPLOYER_OBLIGATIONS } from "@/lib/owc-data";
 
@@ -22,7 +23,6 @@ export function EmployerScreen() {
       <TopBar title="Employer Services" subtitle="Register · report · comply" />
 
       <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-5">
-        {/* Report injury CTA */}
         <button
           type="button"
           onClick={() => navigate("contact", { category: "Workplace Injury Report" })}
@@ -42,7 +42,10 @@ export function EmployerScreen() {
           <ArrowRight className="h-5 w-5 shrink-0 text-destructive" />
         </button>
 
-        {/* Registration / process steps */}
+        <section className="pt-5">
+          <EmployerVerification />
+        </section>
+
         <section className="pt-6">
           <SectionTitle eyebrow="Getting started" title="How employer registration works" />
           <div className="mt-4 space-y-3">
@@ -70,7 +73,6 @@ export function EmployerScreen() {
           </div>
         </section>
 
-        {/* Obligations */}
         <section className="pt-6">
           <SectionTitle eyebrow="Compliance" title="Your obligations under the Act" />
           <div className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-app">
@@ -87,7 +89,6 @@ export function EmployerScreen() {
           </div>
         </section>
 
-        {/* Compensation process FAQ */}
         <section className="pt-6">
           <SectionTitle eyebrow="Compensation process" title="Common employer questions" />
           <Accordion type="single" collapsible className="mt-3">
@@ -121,7 +122,6 @@ export function EmployerScreen() {
           </Accordion>
         </section>
 
-        {/* Actions */}
         <section className="space-y-3 py-6">
           <Button onClick={() => navigate("forms")} variant="outline" className="h-12 w-full justify-between">
             <span className="flex items-center gap-2">
