@@ -32,6 +32,8 @@ import {
 } from "@/components/ui/select";
 import { TopBar } from "@/components/app/top-bar";
 import { Field, SecurityNote } from "@/components/app/kit";
+import { lodgeClaim } from "@/lib/api";
+import { buildClaimLodgementInput } from "@/lib/claim-lodgement";
 import { useNav } from "@/lib/nav";
 import { PROVINCES, CLAIM_TYPES } from "@/lib/owc-data";
 import { cn } from "@/lib/utils";
@@ -51,7 +53,6 @@ export function LodgeScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [reference, setReference] = useState<string | null>(null);
 
-  // form fields
   const [form, setForm] = useState({
     name: "",
     dob: "",
@@ -70,7 +71,6 @@ export function LodgeScreen() {
   const set = (k: keyof typeof form, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  // captcha
   const [a] = useState(() => 3 + Math.floor(Math.random() * 6));
   const [b] = useState(() => 2 + Math.floor(Math.random() * 6));
   const [captcha, setCaptcha] = useState("");
@@ -108,7 +108,7 @@ export function LodgeScreen() {
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!captchaOk) {
       toast.error("Please complete the security check.");
       return;
@@ -117,13 +117,26 @@ export function LodgeScreen() {
       toast.error("Please confirm the declaration to proceed.");
       return;
     }
+
     setSubmitting(true);
-    setTimeout(() => {
-      const num = Math.floor(100000 + Math.random() * 899999);
-      setReference(`OWC-2026-${num}`);
+    try {
+      const input = buildClaimLodgementInput(form, files.length, agree);
+      const result = await lodgeClaim(input);
+      setReference(result.reference);
+      toast.success(
+        result.source === "owc-api"
+          ? "Claim submitted securely."
+          : "Demonstration claim created. Configure the OWC API for live lodgement.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Claim lodgement is temporarily unavailable. Please try again.",
+      );
+    } finally {
       setSubmitting(false);
-      toast.success("Claim submitted securely.");
-    }, 1400);
+    }
   };
 
   if (reference) {
@@ -188,7 +201,6 @@ export function LodgeScreen() {
         showBack={false}
       />
 
-      {/* Stepper */}
       <div className="border-b border-border bg-card px-4 py-3">
         <div className="flex items-center justify-between">
           {STEPS.map((s, i) => {
@@ -202,7 +214,7 @@ export function LodgeScreen() {
                     "grid h-9 w-9 place-items-center rounded-full border-2 transition",
                     done && "border-success bg-success text-white",
                     active && "border-gold bg-gold/15 text-gold-foreground",
-                    !done && !active && "border-border bg-secondary text-muted-foreground"
+                    !done && !active && "border-border bg-secondary text-muted-foreground",
                   )}
                 >
                   {done ? (
@@ -214,7 +226,7 @@ export function LodgeScreen() {
                 <span
                   className={cn(
                     "mt-1 text-[10px] font-semibold",
-                    active ? "text-primary" : "text-muted-foreground"
+                    active ? "text-primary" : "text-muted-foreground",
                   )}
                 >
                   {s.label}
@@ -231,7 +243,6 @@ export function LodgeScreen() {
         </div>
       </div>
 
-      {/* Step content */}
       <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-5">
         <div key={step} className="animate-screen-in space-y-4">
           {step === 0 && (
@@ -407,12 +418,12 @@ export function LodgeScreen() {
                     <Upload className="h-5 w-5" />
                   </span>
                   <span className="text-[12px] font-semibold text-foreground">
-                    Upload files
+                    Select files
                   </span>
                 </button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Attach a medical report (MED-1), proof of ID, payslip and injury
+                Select a medical report (MED-1), proof of ID, payslip and injury
                 photos · PDF/JPG/PNG · up to 8 files.
               </p>
 
@@ -462,10 +473,9 @@ export function LodgeScreen() {
               )}
 
               <SecurityNote>
-                All uploads are encrypted in transit and at rest.
+                Selected file metadata is registered with the claim. Secure evidence-file transfer is completed through the claim record after lodgement.
               </SecurityNote>
 
-              {/* Captcha */}
               <div className="rounded-2xl border border-border bg-secondary/40 p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-[12px] font-semibold text-foreground">
@@ -488,7 +498,6 @@ export function LodgeScreen() {
                 </div>
               </div>
 
-              {/* Declaration */}
               <label className="flex items-start gap-3 rounded-2xl bg-secondary/60 p-4">
                 <Checkbox
                   checked={agree}
@@ -506,7 +515,6 @@ export function LodgeScreen() {
         </div>
       </div>
 
-      {/* Footer nav */}
       <div className="shrink-0 border-t border-border bg-card p-3 pb-safe">
         <div className="flex gap-3 pb-1">
           <Button
@@ -527,7 +535,7 @@ export function LodgeScreen() {
               Continue <ArrowRight />
             </Button>
           ) : (
-            <Button onClick={submit} disabled={submitting} className="h-12 flex-[2]">
+            <Button onClick={() => void submit()} disabled={submitting} className="h-12 flex-[2]">
               {submitting ? (
                 <>
                   <Loader2 className="animate-spin" /> Submitting…
