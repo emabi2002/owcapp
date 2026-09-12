@@ -1,4 +1,11 @@
-import { SAMPLE_CLAIMS, type ClaimRecord } from "@/lib/owc-data";
+import {
+  FORMS,
+  NEWS,
+  SAMPLE_CLAIMS,
+  type ClaimRecord,
+  type FormDoc,
+  type NewsItem,
+} from "@/lib/owc-data";
 
 const DEFAULT_OWC_API_BASE_URL = process.env.NEXT_PUBLIC_OWC_API_BASE_URL?.trim() ?? "";
 
@@ -9,6 +16,8 @@ type ApiOptions = {
   fetchImpl?: FetchLike;
 };
 
+type ContentSource = "owc-api" | "mock";
+
 export type TrackClaimInput = {
   reference: string;
   surname?: string;
@@ -17,7 +26,7 @@ export type TrackClaimInput = {
 export type TrackClaimResult = {
   found: boolean;
   claim: ClaimRecord | null;
-  source: "owc-api" | "mock";
+  source: ContentSource;
 };
 
 export type LodgeClaimInput = {
@@ -39,7 +48,7 @@ export type LodgeClaimInput = {
 export type LodgeClaimResult = {
   reference: string;
   receivedAt?: string;
-  source: "owc-api" | "mock";
+  source: ContentSource;
 };
 
 export type EmployerVerifyResult = {
@@ -48,7 +57,7 @@ export type EmployerVerifyResult = {
   registrationNo?: string;
   policyExpiry?: string;
   status?: string;
-  source: "owc-api" | "mock";
+  source: ContentSource;
 };
 
 export type InjuryReportInput = {
@@ -63,7 +72,17 @@ export type InjuryReportInput = {
 
 export type InjuryReportResult = {
   reference: string;
-  source: "owc-api" | "mock";
+  source: ContentSource;
+};
+
+export type PublicNewsResult = {
+  items: NewsItem[];
+  source: ContentSource;
+};
+
+export type PublicFormsResult = {
+  items: FormDoc[];
+  source: ContentSource;
 };
 
 export function isOwcApiConfigured(baseUrl = DEFAULT_OWC_API_BASE_URL) {
@@ -166,6 +185,52 @@ function getMockClaim(reference: string): ClaimRecord | null {
 
 function newMockReference(prefix = "OWC") {
   return `${prefix}-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+}
+
+function normalizeNewsCategory(value: unknown): NewsItem["category"] {
+  const category = String(value ?? "Announcement");
+  const supported: NewsItem["category"][] = [
+    "Announcement",
+    "Awareness",
+    "Public Notice",
+    "Consultation",
+    "Labour Update",
+  ];
+  return supported.includes(category as NewsItem["category"])
+    ? (category as NewsItem["category"])
+    : "Announcement";
+}
+
+function normalizePublicNewsItem(value: Record<string, unknown>): NewsItem {
+  return {
+    slug: String(value.slug ?? value.id ?? ""),
+    category: normalizeNewsCategory(value.category),
+    date: String(value.date ?? ""),
+    title: String(value.title ?? "Untitled"),
+    excerpt: String(value.excerpt ?? ""),
+    body: String(value.body ?? ""),
+    image: String(value.image ?? ""),
+    featured: Boolean(value.featured),
+  };
+}
+
+function normalizeFormCategory(value: unknown): FormDoc["category"] {
+  const category = String(value ?? "Claims");
+  const supported: FormDoc["category"][] = ["Claims", "Employer", "Medical", "Guidelines"];
+  return supported.includes(category as FormDoc["category"])
+    ? (category as FormDoc["category"])
+    : "Claims";
+}
+
+function normalizePublicFormItem(value: Record<string, unknown>): FormDoc {
+  return {
+    code: String(value.code ?? ""),
+    title: String(value.title ?? "Untitled"),
+    category: normalizeFormCategory(value.category),
+    format: value.format === "DOCX" ? "DOCX" : "PDF",
+    size: String(value.size ?? "—"),
+    updated: String(value.updated ?? ""),
+  };
 }
 
 export async function trackClaim(
@@ -313,4 +378,48 @@ export async function reportInjury(
   }
 
   return { reference: payload.reference, source: "owc-api" };
+}
+
+export async function getPublicNews(
+  options: ApiOptions = {},
+): Promise<PublicNewsResult> {
+  const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
+  if (!isOwcApiConfigured(baseUrl)) return { items: NEWS, source: "mock" };
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(buildOwcApiUrl("/api/public/news", baseUrl), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error("OWC news service is temporarily unavailable.");
+  }
+
+  const payload = (await response.json()) as { items?: Array<Record<string, unknown>> };
+  return {
+    items: (payload.items ?? []).map(normalizePublicNewsItem),
+    source: "owc-api",
+  };
+}
+
+export async function getPublicForms(
+  options: ApiOptions = {},
+): Promise<PublicFormsResult> {
+  const baseUrl = options.baseUrl ?? DEFAULT_OWC_API_BASE_URL;
+  if (!isOwcApiConfigured(baseUrl)) return { items: FORMS, source: "mock" };
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(buildOwcApiUrl("/api/public/forms", baseUrl), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error("OWC forms service is temporarily unavailable.");
+  }
+
+  const payload = (await response.json()) as { items?: Array<Record<string, unknown>> };
+  return {
+    items: (payload.items ?? []).map(normalizePublicFormItem),
+    source: "owc-api",
+  };
 }
