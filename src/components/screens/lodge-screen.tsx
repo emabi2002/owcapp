@@ -17,6 +17,7 @@ import {
   Building2,
   Stethoscope,
   FileCheck2,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,14 @@ import { TopBar } from "@/components/app/top-bar";
 import { Field, SecurityNote } from "@/components/app/kit";
 import { useNav } from "@/lib/nav";
 import { PROVINCES, CLAIM_TYPES } from "@/lib/owc-data";
+import type { ClaimLodgeResponse } from "@/lib/api/contracts";
+import {
+  EVIDENCE_CATEGORIES,
+  evidenceUploadOutcome,
+  inferEvidenceCategory,
+  uploadClaimEvidence,
+  type EvidenceCategory,
+} from "@/lib/api/claim-evidence";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -43,15 +52,24 @@ const STEPS = [
   { label: "Documents", icon: FileCheck2 },
 ];
 
+type SelectedEvidence = {
+  file: File;
+  name: string;
+  size: number;
+  category: EvidenceCategory;
+  status?: "uploading" | "uploaded" | "failed";
+  error?: string;
+};
+
 export function LodgeScreen() {
   const { navigate, switchTab, back } = useNav();
   const [step, setStep] = useState(0);
-  const [files, setFiles] = useState<{ name: string; size: number }[]>([]);
+  const [files, setFiles] = useState<SelectedEvidence[]>([]);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [reference, setReference] = useState<string | null>(null);
+  const [evidenceToken, setEvidenceToken] = useState<string | null>(null);
 
-  // form fields
   const [form, setForm] = useState({
     name: "",
     dob: "",
@@ -70,7 +88,6 @@ export function LodgeScreen() {
   const set = (k: keyof typeof form, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  // captcha
   const [a] = useState(() => 3 + Math.floor(Math.random() * 6));
   const [b] = useState(() => 2 + Math.floor(Math.random() * 6));
   const [captcha, setCaptcha] = useState("");
@@ -81,8 +98,91 @@ export function LodgeScreen() {
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
-    const next = Array.from(list).map((f) => ({ name: f.name, size: f.size }));
-    setFiles((p) => [...p, ...next].slice(0, 8));
+    const next = Array.from(list).map((file) => ({
+      file,
+      name: file.name,
+      size: file.size,
+      category: inferEvidenceCategory(file),
+    }));
+    setFiles((previous) => [...previous, ...next].slice(0, 8));
+  };
+
+  const updateFileCategory = (index: number, category: EvidenceCategory) => {
+    setFiles((previous) =>
+      previous.map((item, currentIndex) =>
+        currentIndex === index ? { ...item, category } : item,
+      ),
+    );
+  };
+
+  const uploadEvidence = async (
+    claimReference: string,
+    token: string,
+    indexes: number[] = files.map((_, index) => index),
+  ) => {
+    let failures = 0;
+
+    for (const index of indexes) {
+      const item = files[index];
+      if (!item) continue;
+
+      setFiles((previous) =>
+        previous.map((entry, currentIndex) =>
+          currentIndex === index
+            ? { ...entry, status: "uploading", error: undefined }
+            : entry,
+        ),
+      );
+
+      try {
+        await uploadClaimEvidence({
+          reference: claimReference,
+          token,
+          file: item.file,
+          title: item.name,
+          category: item.category,
+        });
+        setFiles((previous) =>
+          previous.map((entry, currentIndex) =>
+            currentIndex === index
+              ? { ...entry, status: "uploaded", error: undefined }
+              : entry,
+          ),
+        );
+      } catch (error) {
+        failures += 1;
+        const message =
+          error instanceof Error
+            ? error.message
+            : "The supporting document could not be uploaded.";
+        setFiles((previous) =>
+          previous.map((entry, currentIndex) =>
+            currentIndex === index
+              ? { ...entry, status: "failed", error: message }
+              : entry,
+          ),
+        );
+      }
+    }
+
+    return failures;
+  };
+
+  const retryFailedUploads = async () => {
+    if (!reference || !evidenceToken) return;
+    const failedIndexes = files
+      .map((item, index) => (item.status === "failed" ? index : -1))
+      .filter((index) => index >= 0);
+    if (failedIndexes.length === 0) return;
+
+    setSubmitting(true);
+    try {
+      const failures = await uploadEvidence(reference, evidenceToken, failedIndexes);
+      if (failures === 0) toast.success("Supporting documents uploaded securely.");
+      else toast.error(`${failures} supporting document${failures === 1 ? "" : "s"} could not be uploaded.`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const progress = useMemo(() => ((step + 1) / STEPS.length) * 100, [step]);
@@ -108,7 +208,7 @@ export function LodgeScreen() {
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!captchaOk) {
       toast.error("Please complete the security check.");
       return;
@@ -117,16 +217,83 @@ export function LodgeScreen() {
       toast.error("Please confirm the declaration to proceed.");
       return;
     }
+
     setSubmitting(true);
-    setTimeout(() => {
-      const num = Math.floor(100000 + Math.random() * 899999);
-      setReference(`OWC-2026-${num}`);
+    try {
+      const response = await fetch("/api/owc/claims/lodge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          dob: form.dob,
+          phone: form.phone,
+          email: form.email,
+          nid: form.nid,
+          employer: form.employer,
+          occupation: form.occupation,
+          province: form.province,
+          wage: form.wage,
+          injuryDate: form.idate,
+          injuryType: form.itype,
+          location: form.location,
+          description: form.desc,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as
+        | ClaimLodgeResponse
+        | { error?: string };
+
+      if (!response.ok || !("reference" in payload) || !payload.reference) {
+        const message = "error" in payload && payload.error
+          ? payload.error
+          : "The claim could not be lodged. Please try again.";
+        throw new Error(message);
+      }
+
+      const claimReference = payload.reference;
+      const token = payload.evidenceUploadToken ?? null;
+      setEvidenceToken(token);
+
+      let uploadOutcome = evidenceUploadOutcome(files.length, 0);
+      if (files.length > 0) {
+        if (token) {
+          const failures = await uploadEvidence(claimReference, token);
+          uploadOutcome = evidenceUploadOutcome(files.length, failures);
+          if (uploadOutcome === "partial") {
+            toast.error(
+              `Claim lodged. ${failures} supporting document${failures === 1 ? "" : "s"} still need to be uploaded.`,
+            );
+          }
+        } else {
+          uploadOutcome = "partial";
+          setFiles((previous) =>
+            previous.map((item) => ({
+              ...item,
+              status: "failed",
+              error: "Secure document upload authorization was not issued by OWC.",
+            })),
+          );
+          toast.error("Claim lodged, but supporting document upload is not currently available.");
+        }
+      }
+
+      setReference(claimReference);
+      if (uploadOutcome === "none") {
+        toast.success("Claim submitted securely.");
+      } else if (uploadOutcome === "complete") {
+        toast.success("Claim and supporting documents submitted securely.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The claim could not be lodged.");
+    } finally {
       setSubmitting(false);
-      toast.success("Claim submitted securely.");
-    }, 1400);
+    }
   };
 
   if (reference) {
+    const uploadedCount = files.filter((item) => item.status === "uploaded").length;
+    const failedCount = files.filter((item) => item.status === "failed").length;
+
     return (
       <div className="flex h-full flex-col">
         <TopBar title="Claim lodged" subtitle="Confirmation" showBack={false} />
@@ -162,6 +329,51 @@ export function LodgeScreen() {
               <Copy className="h-5 w-5" />
             </button>
           </div>
+
+          {files.length > 0 && (
+            <div className="mt-4 w-full rounded-2xl border border-border bg-card p-4 text-left">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-foreground">Supporting documents</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {uploadedCount}/{files.length} uploaded
+                </span>
+              </div>
+              <ul className="mt-3 space-y-2">
+                {files.map((item, index) => (
+                  <li key={`${item.name}-${index}`} className="rounded-xl bg-secondary/50 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      {item.status === "uploaded" ? (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                      ) : item.status === "uploading" ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+                      )}
+                      <span className="flex-1 truncate text-[12px] font-medium text-foreground">
+                        {item.name}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">{item.category}</span>
+                    </div>
+                    {item.error && (
+                      <p className="mt-1 text-[10px] leading-snug text-destructive">{item.error}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {failedCount > 0 && evidenceToken && (
+                <Button
+                  variant="outline"
+                  onClick={() => void retryFailedUploads()}
+                  disabled={submitting}
+                  className="mt-3 h-10 w-full"
+                >
+                  {submitting ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                  Retry failed uploads
+                </Button>
+              )}
+            </div>
+          )}
+
           <Button
             onClick={() => navigate("track", { ref: reference })}
             className="mt-6 h-12 w-full"
@@ -188,7 +400,6 @@ export function LodgeScreen() {
         showBack={false}
       />
 
-      {/* Stepper */}
       <div className="border-b border-border bg-card px-4 py-3">
         <div className="flex items-center justify-between">
           {STEPS.map((s, i) => {
@@ -202,7 +413,7 @@ export function LodgeScreen() {
                     "grid h-9 w-9 place-items-center rounded-full border-2 transition",
                     done && "border-success bg-success text-white",
                     active && "border-gold bg-gold/15 text-gold-foreground",
-                    !done && !active && "border-border bg-secondary text-muted-foreground"
+                    !done && !active && "border-border bg-secondary text-muted-foreground",
                   )}
                 >
                   {done ? (
@@ -214,7 +425,7 @@ export function LodgeScreen() {
                 <span
                   className={cn(
                     "mt-1 text-[10px] font-semibold",
-                    active ? "text-primary" : "text-muted-foreground"
+                    active ? "text-primary" : "text-muted-foreground",
                   )}
                 >
                   {s.label}
@@ -231,7 +442,6 @@ export function LodgeScreen() {
         </div>
       </div>
 
-      {/* Step content */}
       <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-5">
         <div key={step} className="animate-screen-in space-y-4">
           {step === 0 && (
@@ -407,12 +617,12 @@ export function LodgeScreen() {
                     <Upload className="h-5 w-5" />
                   </span>
                   <span className="text-[12px] font-semibold text-foreground">
-                    Upload files
+                    Select files
                   </span>
                 </button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Attach a medical report (MED-1), proof of ID, payslip and injury
+                Select a medical report (MED-1), proof of ID, payslip and injury
                 photos · PDF/JPG/PNG · up to 8 files.
               </p>
 
@@ -428,6 +638,7 @@ export function LodgeScreen() {
                 ref={fileRef}
                 type="file"
                 multiple
+                accept="application/pdf,image/jpeg,image/png"
                 className="hidden"
                 onChange={(e) => addFiles(e.target.files)}
               />
@@ -436,36 +647,56 @@ export function LodgeScreen() {
                 <ul className="space-y-2">
                   {files.map((f, i) => (
                     <li
-                      key={i}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5"
+                      key={`${f.name}-${i}`}
+                      className="rounded-xl border border-border bg-card px-3 py-2.5"
                     >
-                      <FileIcon className="h-4 w-4 shrink-0 text-gold" />
-                      <span className="flex-1 truncate text-[13px] text-foreground">
-                        {f.name}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {(f.size / 1024).toFixed(0)} KB
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFiles((p) => p.filter((_, idx) => idx !== i))
-                        }
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label={`Remove ${f.name}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <FileIcon className="h-4 w-4 shrink-0 text-gold" />
+                        <span className="flex-1 truncate text-[13px] text-foreground">
+                          {f.name}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {(f.size / 1024).toFixed(0)} KB
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFiles((p) => p.filter((_, idx) => idx !== i))
+                          }
+                          className="text-muted-foreground hover:text-destructive"
+                          aria-label={`Remove ${f.name}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="mt-2">
+                        <Select
+                          value={f.category}
+                          onValueChange={(value) =>
+                            updateFileCategory(i, value as EvidenceCategory)
+                          }
+                        >
+                          <SelectTrigger className="h-9 text-[12px]">
+                            <SelectValue placeholder="Evidence category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {EVIDENCE_CATEGORIES.map((category) => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
 
               <SecurityNote>
-                All uploads are encrypted in transit and at rest.
+                Claim information and selected supporting documents are transmitted through the secure OWC service. Documents are uploaded only after OWC issues the claim reference and short-lived upload authorization.
               </SecurityNote>
 
-              {/* Captcha */}
               <div className="rounded-2xl border border-border bg-secondary/40 p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-[12px] font-semibold text-foreground">
@@ -488,7 +719,6 @@ export function LodgeScreen() {
                 </div>
               </div>
 
-              {/* Declaration */}
               <label className="flex items-start gap-3 rounded-2xl bg-secondary/60 p-4">
                 <Checkbox
                   checked={agree}
@@ -506,7 +736,6 @@ export function LodgeScreen() {
         </div>
       </div>
 
-      {/* Footer nav */}
       <div className="shrink-0 border-t border-border bg-card p-3 pb-safe">
         <div className="flex gap-3 pb-1">
           <Button
@@ -527,7 +756,7 @@ export function LodgeScreen() {
               Continue <ArrowRight />
             </Button>
           ) : (
-            <Button onClick={submit} disabled={submitting} className="h-12 flex-[2]">
+            <Button onClick={() => void submit()} disabled={submitting} className="h-12 flex-[2]">
               {submitting ? (
                 <>
                   <Loader2 className="animate-spin" /> Submitting…
