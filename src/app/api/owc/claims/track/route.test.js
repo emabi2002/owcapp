@@ -32,7 +32,7 @@ describe("POST /api/owc/claims/track", () => {
           found: true,
           claim: {
             reference: "OWC-2026-004821",
-            status: "Under Assessment",
+            status: "New",
             type: "Workplace Injury",
             employer: "Highlands Construction Ltd",
             lodged: "8 Sep 2026",
@@ -48,6 +48,7 @@ describe("POST /api/owc/claims/track", () => {
     const json = await response.json();
     expect(response.status).toBe(200);
     expect(json.claim.reference).toBe("OWC-2026-004821");
+    expect(json.claim.status).toBe("Received");
   });
 
   test("maps not-found results to 404", async () => {
