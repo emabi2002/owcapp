@@ -1,11 +1,32 @@
 import { NextResponse } from "next/server";
 import { OwcApiError, owcRequest } from "@/lib/api/client";
-import type { ClaimTrackResponse } from "@/lib/api/contracts";
+import type { ClaimStatus, ClaimTrackResponse } from "@/lib/api/contracts";
 
+type UpstreamClaim = Omit<ClaimTrackResponse, "status"> & { status: string };
 type UpstreamTrackResponse = {
   found: boolean;
-  claim?: ClaimTrackResponse;
+  claim?: UpstreamClaim;
 };
+
+function normalizeStatus(status: string): ClaimStatus {
+  switch (status.trim().toLowerCase()) {
+    case "new":
+    case "received":
+      return "Received";
+    case "under assessment":
+      return "Under Assessment";
+    case "awaiting documents":
+      return "Awaiting Documents";
+    case "approved":
+      return "Approved";
+    case "paid":
+      return "Paid";
+    case "declined":
+      return "Declined";
+    default:
+      return "Under Assessment";
+  }
+}
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as { reference?: unknown; surname?: unknown } | null;
@@ -26,7 +47,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ found: false }, { status: 404 });
     }
 
-    return NextResponse.json({ found: true, claim: upstream.claim });
+    const claim: ClaimTrackResponse = {
+      ...upstream.claim,
+      status: normalizeStatus(upstream.claim.status),
+    };
+    return NextResponse.json({ found: true, claim });
   } catch (error) {
     if (error instanceof OwcApiError) {
       const status = error.status === 404 ? 404 : error.status >= 500 ? 503 : error.status;
