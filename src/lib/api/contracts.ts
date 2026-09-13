@@ -1,5 +1,4 @@
 export type ClaimStatus =
-  | "New"
   | "Received"
   | "Under Assessment"
   | "Awaiting Documents"
