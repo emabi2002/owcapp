@@ -10,6 +10,7 @@ export const EVIDENCE_CATEGORIES = [
 ] as const;
 
 export type EvidenceCategory = (typeof EVIDENCE_CATEGORIES)[number];
+export type EvidenceUploadOutcome = "none" | "complete" | "partial";
 
 export type ClaimEvidenceUploadInput = {
   reference: string;
@@ -29,6 +30,14 @@ export type ClaimEvidenceUploadResult = {
   status: string;
   securityScan?: string;
 };
+
+export function evidenceUploadOutcome(
+  totalFiles: number,
+  failures: number,
+): EvidenceUploadOutcome {
+  if (totalFiles === 0) return "none";
+  return failures === 0 ? "complete" : "partial";
+}
 
 export function inferEvidenceCategory(file: File): EvidenceCategory {
   const name = file.name.toLowerCase();
