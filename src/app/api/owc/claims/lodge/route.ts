@@ -5,6 +5,8 @@ import type { ClaimLodgeRequest, ClaimLodgeResponse } from "@/lib/api/contracts"
 type UpstreamLodgeResponse = {
   ok?: boolean;
   reference?: string;
+  evidenceUploadToken?: string;
+  evidenceUploadExpiresInSeconds?: number;
   error?: string;
 };
 
@@ -48,6 +50,8 @@ export async function POST(request: Request) {
       reference: upstream.reference,
       status: "Received",
       message: "Claim received by OWC.",
+      evidenceUploadToken: upstream.evidenceUploadToken,
+      evidenceUploadExpiresInSeconds: upstream.evidenceUploadExpiresInSeconds,
     };
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
