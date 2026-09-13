@@ -6,36 +6,14 @@ import { toast } from "sonner";
 import { TopBar } from "@/components/app/top-bar";
 import { Pill } from "@/components/app/kit";
 import { useNav } from "@/lib/nav";
-import { NEWS } from "@/lib/owc-data";
 import type { NewsItem } from "@/lib/api/contracts";
+import { loadPublicNews } from "@/lib/api/public-content";
 import { cn } from "@/lib/utils";
 
 const CATS = ["All", "Announcement", "Public Notice", "Awareness", "Consultation", "Labour Update"];
-const fallbackEnabled = process.env.NEXT_PUBLIC_OWC_PUBLIC_CONTENT_FALLBACK === "true";
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function localNews(): NewsItem[] {
-  return NEWS.map((item) => ({
-    id: item.slug,
-    slug: item.slug,
-    category: item.category,
-    date: item.date,
-    title: item.title,
-    excerpt: item.excerpt,
-    body: item.body,
-    image: item.image,
-    featured: Boolean(item.featured),
-  }));
-}
-
-async function loadNews(): Promise<NewsItem[]> {
-  const response = await fetch("/api/owc/content/news", { cache: "no-store" });
-  if (!response.ok) throw new Error("News service unavailable");
-  const payload = (await response.json()) as { items?: NewsItem[] };
-  return Array.isArray(payload.items) ? payload.items : [];
 }
 
 export function NewsScreen() {
@@ -45,12 +23,9 @@ export function NewsScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    void loadNews()
+    void loadPublicNews()
       .then(setNews)
-      .catch(() => {
-        if (fallbackEnabled) setNews(localNews());
-        else toast.error("Official news is temporarily unavailable.");
-      })
+      .catch(() => toast.error("Official news is temporarily unavailable."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -104,18 +79,22 @@ export function NewsScreen() {
 export function NewsDetailScreen() {
   const { params } = useNav();
   const slug = String(params.slug || "");
-  const [item, setItem] = useState<NewsItem | null>(() => fallbackEnabled ? localNews().find((entry) => entry.slug === slug) ?? null : null);
+  const [item, setItem] = useState<NewsItem | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    void loadNews()
+    void loadPublicNews()
       .then((items) => setItem(items.find((entry) => entry.slug === slug) ?? null))
-      .catch(() => {
-        if (!fallbackEnabled) toast.error("This article is temporarily unavailable.");
-      });
+      .catch(() => toast.error("This article is temporarily unavailable."))
+      .finally(() => setLoading(false));
   }, [slug]);
 
-  if (!item) {
+  if (loading) {
     return <div className="flex h-full flex-col"><TopBar title="Article" subtitle="Official OWC notice" /><div className="grid flex-1 place-items-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div></div>;
+  }
+
+  if (!item) {
+    return <div className="flex h-full flex-col"><TopBar title="Article" subtitle="Official OWC notice" /><div className="grid flex-1 place-items-center px-6 text-center text-[13px] text-muted-foreground">The requested article is not available.</div></div>;
   }
 
   return (
