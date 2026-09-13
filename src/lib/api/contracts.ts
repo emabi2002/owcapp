@@ -61,17 +61,23 @@ export interface EmployerVerifyResponse {
 
 export interface NewsItem {
   id: string;
+  slug: string;
+  category: string;
+  date: string;
   title: string;
-  summary?: string;
-  publishedAt?: string;
-  category?: string;
-  href?: string;
+  excerpt: string;
+  body?: string;
+  image: string;
+  featured: boolean;
 }
 
 export interface FormItem {
   id: string;
-  code?: string;
+  code: string;
   title: string;
-  description?: string;
-  href?: string;
+  category: string;
+  format: "PDF" | "DOCX";
+  size: string;
+  updated: string;
+  fileUrl?: string;
 }
