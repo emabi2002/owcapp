@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { uploadClaimEvidence } from "./claim-evidence";
+import { evidenceUploadOutcome, uploadClaimEvidence } from "./claim-evidence";
 
 const originalFetch = globalThis.fetch;
 
@@ -61,5 +61,13 @@ describe("uploadClaimEvidence", () => {
       title: "Medical certificate",
       category: "Medical",
     })).rejects.toThrow("Evidence file failed security scanning");
+  });
+});
+
+describe("evidenceUploadOutcome", () => {
+  test("distinguishes a complete upload from a partial failure", () => {
+    expect(evidenceUploadOutcome(3, 0)).toBe("complete");
+    expect(evidenceUploadOutcome(3, 1)).toBe("partial");
+    expect(evidenceUploadOutcome(0, 0)).toBe("none");
   });
 });
