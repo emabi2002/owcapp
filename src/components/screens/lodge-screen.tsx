@@ -38,6 +38,7 @@ import { PROVINCES, CLAIM_TYPES } from "@/lib/owc-data";
 import type { ClaimLodgeResponse } from "@/lib/api/contracts";
 import {
   EVIDENCE_CATEGORIES,
+  evidenceUploadOutcome,
   inferEvidenceCategory,
   uploadClaimEvidence,
   type EvidenceCategory,
@@ -253,15 +254,18 @@ export function LodgeScreen() {
       const token = payload.evidenceUploadToken ?? null;
       setEvidenceToken(token);
 
+      let uploadOutcome = evidenceUploadOutcome(files.length, 0);
       if (files.length > 0) {
         if (token) {
           const failures = await uploadEvidence(claimReference, token);
-          if (failures > 0) {
+          uploadOutcome = evidenceUploadOutcome(files.length, failures);
+          if (uploadOutcome === "partial") {
             toast.error(
               `Claim lodged. ${failures} supporting document${failures === 1 ? "" : "s"} still need to be uploaded.`,
             );
           }
         } else {
+          uploadOutcome = "partial";
           setFiles((previous) =>
             previous.map((item) => ({
               ...item,
@@ -274,8 +278,11 @@ export function LodgeScreen() {
       }
 
       setReference(claimReference);
-      if (files.length === 0) toast.success("Claim submitted securely.");
-      else if (token) toast.success("Claim registered with OWC.");
+      if (uploadOutcome === "none") {
+        toast.success("Claim submitted securely.");
+      } else if (uploadOutcome === "complete") {
+        toast.success("Claim and supporting documents submitted securely.");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "The claim could not be lodged.");
     } finally {
