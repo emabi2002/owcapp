@@ -5,23 +5,10 @@ import { Search, Download, FileText, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { TopBar } from "@/components/app/top-bar";
-import { FORMS, FORM_CATEGORIES } from "@/lib/owc-data";
+import { FORM_CATEGORIES } from "@/lib/owc-data";
 import type { FormItem } from "@/lib/api/contracts";
+import { loadPublicForms } from "@/lib/api/public-content";
 import { cn } from "@/lib/utils";
-
-const fallbackEnabled = process.env.NEXT_PUBLIC_OWC_PUBLIC_CONTENT_FALLBACK === "true";
-
-function localForms(): FormItem[] {
-  return FORMS.map((item) => ({
-    id: item.code,
-    code: item.code,
-    title: item.title,
-    category: item.category,
-    format: item.format,
-    size: item.size,
-    updated: item.updated,
-  }));
-}
 
 export function FormsScreen() {
   const [query, setQuery] = useState("");
@@ -31,16 +18,9 @@ export function FormsScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    void fetch("/api/owc/content/forms", { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Forms service unavailable");
-        const payload = (await response.json()) as { items?: FormItem[] };
-        setForms(Array.isArray(payload.items) ? payload.items : []);
-      })
-      .catch(() => {
-        if (fallbackEnabled) setForms(localForms());
-        else toast.error("Official forms are temporarily unavailable.");
-      })
+    void loadPublicForms()
+      .then(setForms)
+      .catch(() => toast.error("Official forms are temporarily unavailable."))
       .finally(() => setLoading(false));
   }, []);
 
