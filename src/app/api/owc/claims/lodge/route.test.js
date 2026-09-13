@@ -32,10 +32,15 @@ describe("POST /api/owc/claims/lodge", () => {
     expect(response.status).toBe(400);
   });
 
-  test("returns the authoritative OWC claim reference", async () => {
+  test("returns the authoritative OWC claim reference and evidence upload grant", async () => {
     process.env.OWC_API_BASE_URL = "https://owc.example.gov.pg";
     globalThis.fetch = async () =>
-      new Response(JSON.stringify({ ok: true, reference: "OWC-2026-005112" }), {
+      new Response(JSON.stringify({
+        ok: true,
+        reference: "OWC-2026-005112",
+        evidenceUploadToken: "grant-token",
+        evidenceUploadExpiresInSeconds: 900,
+      }), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
@@ -44,6 +49,8 @@ describe("POST /api/owc/claims/lodge", () => {
     const json = await response.json();
     expect(response.status).toBe(201);
     expect(json.reference).toBe("OWC-2026-005112");
+    expect(json.evidenceUploadToken).toBe("grant-token");
+    expect(json.evidenceUploadExpiresInSeconds).toBe(900);
   });
 
   test("fails closed when the OWC API is unavailable", async () => {
