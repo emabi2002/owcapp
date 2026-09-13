@@ -28,12 +28,15 @@ export async function owcRequest<T>(path: string, init: OwcRequestInit = {}): Pr
   const abortFromCaller = () => controller.abort();
   signal?.addEventListener("abort", abortFromCaller, { once: true });
 
+  const isFormData =
+    typeof FormData !== "undefined" && requestInit.body instanceof FormData;
+
   try {
     const response = await fetch(buildUrl(baseUrl, path), {
       ...requestInit,
       headers: {
         accept: "application/json",
-        ...(requestInit.body ? { "content-type": "application/json" } : {}),
+        ...(requestInit.body && !isFormData ? { "content-type": "application/json" } : {}),
         ...headers,
       },
       signal: controller.signal,
