@@ -50,6 +50,8 @@ export interface ClaimLodgeResponse {
   reference: string;
   status?: ClaimStatus;
   message?: string;
+  evidenceUploadToken?: string;
+  evidenceUploadExpiresInSeconds?: number;
 }
 
 export interface EmployerVerifyResponse {
